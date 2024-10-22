@@ -13,6 +13,9 @@ URL = config["RSS_URL"]
 filename = config["PICKLE_FILE"]
 token = config["TOKEN"]
 
+print(chat_id, interval, URL, filename, token)
+
+
 def if_file_exists(filename):
     try:
         with open(filename, "rb") as f:
@@ -33,7 +36,8 @@ def get_old_news_list(filename):
         return pickle.load(f)
 
 def compare_news_lists(news_list, old_news_list):
-    return [news for news in news_list if news not in old_news_list]
+    old_news_urls = [news["url"] for news in old_news_list]
+    return [news for news in news_list if news["url"] not in old_news_urls]
 
 async def send_news(context=None):
     news_list = get_news_list(URL)
@@ -47,7 +51,6 @@ async def send_news(context=None):
 
 
 if __name__ == "__main__":
-    print(config)
     create_file_if_not_exists(filename) 
     application = Application.builder().token(token).build()
     jq = application.job_queue
