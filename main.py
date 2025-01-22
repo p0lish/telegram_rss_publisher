@@ -47,7 +47,10 @@ async def send_news(context=None):
 
     for news in newest_news:
         url = news["url"]
-        await context.bot.send_message(chat_id=chat_id, text=url)
+        tags = news["tags"]
+        title = news["title"]
+        text = f'{title}\n{tags}\n{url}'
+        await context.bot.send_message(chat_id=chat_id, text=text)
 
 
 if __name__ == "__main__":
