@@ -49,7 +49,7 @@ async def send_news(context=None):
         url = news["url"]
         tags = news["tags"]
         title = news["title"]
-        text = f'{title}\n{tags}\n{url}'
+        text = f'{title}\n---\n{url}\n---\n{tags}\n'
         await context.bot.send_message(chat_id=chat_id, text=text)
 
 

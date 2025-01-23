@@ -20,8 +20,13 @@ def get_tags(url):
     page = requests.get(url)
     soup = BeautifulSoup(page.content, "lxml")
     tags = soup.find("meta", {"name": "keywords"})["content"].split(",")
-    tags = [f"#{tag.strip()}" for tag in tags]
-    return tags
+    normalized_tags = [f'#{tag.strip()}' for tag in tags]
+    normalized_tags = [tag.replace(" ", "_") for tag in normalized_tags]
+    normalized_tags = [tag.replace("-", "_") for tag in normalized_tags]
+
+    normalized_tags = [tag.lower() for tag in normalized_tags]
+    normalized_tags = list(set(normalized_tags))
+    return normalized_tags
 
 
 def get_news_list(url):
@@ -32,12 +37,12 @@ def get_news_list(url):
             "title": entry.title,
             "timestamp": int(time.mktime(entry.published_parsed)),
             "url": entry.link,
-            "tags": get_tags(entry.link),
+            "tags": " ".join(get_tags(entry.link))
         }
         for entry in ordered_entries
     ]
 
 
 if __name__ == "__main__":
-    URL = ""
+    URL = "https://telex.hu/rss"
     get_news_list(URL)
