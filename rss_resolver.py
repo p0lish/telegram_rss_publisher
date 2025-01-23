@@ -19,15 +19,16 @@ def list_entries(url):
 def get_tags(url):
     page = requests.get(url)
     soup = BeautifulSoup(page.content, "lxml")
-    tags = soup.find("meta", {"name": "keywords"})["content"].split(",")
-    normalized_tags = [f'#{tag.strip()}' for tag in tags]
-    normalized_tags = [tag.replace(" ", "_") for tag in normalized_tags]
-    normalized_tags = [tag.replace("-", "_") for tag in normalized_tags]
-
-    normalized_tags = [tag.lower() for tag in normalized_tags]
-    normalized_tags = list(set(normalized_tags))
-    return normalized_tags
-
+    try:
+        tags = soup.find("meta", {"name": "keywords"})["content"].split(",")
+        normalized_tags = [f'#{tag.strip()}' for tag in tags]
+        normalized_tags = [tag.replace(" ", "_") for tag in normalized_tags]
+        normalized_tags = [tag.replace("-", "_") for tag in normalized_tags]
+        normalized_tags = [tag.lower() for tag in normalized_tags]
+        normalized_tags = list(set(normalized_tags))
+        return normalized_tags
+    except TypeError:
+        return []
 
 def get_news_list(url):
     entries = get_entries(url)
