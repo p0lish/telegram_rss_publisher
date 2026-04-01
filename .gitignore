@@ -1,4 +1,6 @@
 __pycache__/
 .venv/
 .env
-*.pkl
+*.pklseen.json
+telex_seen.pkl
+.env
