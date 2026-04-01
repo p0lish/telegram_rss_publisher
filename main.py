@@ -1,62 +1,87 @@
-from rss_resolver import get_news_list
-import pickle
+import json
 import logging
+from pathlib import Path
 from telegram.ext import Application
 from dotenv import dotenv_values
+from rss_resolver import get_news_list
 
-config = dotenv_values('.env')
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+config = dotenv_values(".env")
+
+CHAT_ID = config["CHAT_ID"]
+INTERVAL = int(config["INTERVAL"])
+RSS_URL = config["RSS_URL"]
+TOKEN = config["TOKEN"]
+STATE_FILE = Path(config.get("STATE_FILE", "seen.json"))
 
 
-chat_id = config["CHAT_ID"]
-interval = config["INTERVAL"]
-URL = config["RSS_URL"]
-filename = config["PICKLE_FILE"]
-token = config["TOKEN"]
+def load_seen() -> set:
+    if STATE_FILE.exists():
+        try:
+            data = json.loads(STATE_FILE.read_text())
+            return set(data)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("Corrupt state file, starting fresh")
+    return set()
 
-print(chat_id, interval, URL, filename, token)
 
+def save_seen(seen: set):
+    STATE_FILE.write_text(json.dumps(list(seen)))
 
-def if_file_exists(filename):
-    try:
-        with open(filename, "rb") as f:
-            return True
-    except FileNotFoundError:
-        return False
-def create_file_if_not_exists(filename):
-    if not if_file_exists(filename):
-        with open(filename, "wb") as f:
-            pickle.dump([], f)
-
-def save_news_list(news_list, filename):
-    with open(filename, "wb") as f:
-        pickle.dump(news_list, f)
-
-def get_old_news_list(filename):
-    with open(filename, "rb") as f:
-        return pickle.load(f)
-
-def compare_news_lists(news_list, old_news_list):
-    old_news_urls = [news["url"] for news in old_news_list]
-    return [news for news in news_list if news["url"] not in old_news_urls]
 
 async def send_news(context=None):
-    news_list = get_news_list(URL)
-    old_news_list = get_old_news_list(filename)
-    newest_news = compare_news_lists(news_list, old_news_list)
-    save_news_list(news_list, filename)
+    try:
+        news_list = get_news_list(RSS_URL)
+    except Exception as e:
+        logger.error(f"Failed to fetch RSS: {e}")
+        return
 
-    for news in newest_news:
-        url = news["url"]
-        tags = news["tags"]
-        title = news["title"]
-        text = f'{title}\n---\n{url}\n---\n{tags}\n'
-        await context.bot.send_message(chat_id=chat_id, text=text)
+    seen = load_seen()
+    new_articles = [n for n in news_list if n["url"] not in seen]
+
+    if not new_articles:
+        logger.info("No new articles")
+        return
+
+    logger.info(f"{len(new_articles)} new article(s)")
+
+    for article in new_articles:
+        tags = article["tags"]
+        text = article["url"]
+        if tags:
+            text += f"\n{tags}"
+
+        try:
+            await context.bot.send_message(chat_id=CHAT_ID, text=text)
+            seen.add(article["url"])
+            logger.info(f"Sent: {article['title']}")
+        except Exception as e:
+            logger.error(f"Failed to send '{article['title']}': {e}")
+
+    save_seen(seen)
 
 
 if __name__ == "__main__":
-    create_file_if_not_exists(filename) 
-    application = Application.builder().token(token).build()
+    # Migrate pickle state if it exists
+    pickle_file = Path("telex_seen.pkl")
+    if pickle_file.exists() and not STATE_FILE.exists():
+        try:
+            import pickle
+            with open(pickle_file, "rb") as f:
+                old_data = pickle.load(f)
+            urls = {item["url"] for item in old_data if isinstance(item, dict) and "url" in item}
+            save_seen(urls)
+            logger.info(f"Migrated {len(urls)} URLs from pickle to JSON")
+        except Exception as e:
+            logger.warning(f"Could not migrate pickle: {e}")
+
+    logger.info(f"Starting telexbot — checking {RSS_URL} every {INTERVAL}s")
+    application = Application.builder().token(TOKEN).build()
     jq = application.job_queue
-    jq.run_repeating(send_news, interval=int(interval), first=1)
-    
+    jq.run_repeating(send_news, interval=INTERVAL, first=5)
     application.run_polling()
